@@ -82,12 +82,17 @@ export default class BookList extends Controller {
   }
 
   private updatePagerUI(): void {
-    const totalPages =
-      this._pageSizeKey === "alle" ? 1 : Math.max(1, Math.ceil(this._total / this._pageSize));
+    const start = this._total === 0 ? 0 : ((this._page - 1) * this._pageSize) + 1;
+    const end = this._pageSizeKey === "alle"
+      ? this._total
+      : Math.min(this._page * this._pageSize, this._total);
 
-    (this.byId("pageInfo") as any)?.setText?.(`Seite ${this._page} von ${totalPages}`);
+    (this.byId("pageInfo") as any)?.setText?.(`Bücher ${start}–${end} von ${this._total}`);
+
     (this.byId("btnPrev") as any)?.setEnabled?.(this._page > 1 && this._pageSizeKey !== "alle");
-    (this.byId("btnNext") as any)?.setEnabled?.(this._page < totalPages && this._pageSizeKey !== "alle");
+    (this.byId("btnNext") as any)?.setEnabled?.(
+      end < this._total && this._pageSizeKey !== "alle"
+    );
   }
 
   private async refresh(): Promise<void> {
