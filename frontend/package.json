@@ -1,0 +1,16 @@
+{
+  "name": "books-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "ui5 serve --open index.html",
+    "build": "ui5 build --all"
+  },
+  "devDependencies": {
+    "@ui5/cli": "^3.9.0",
+    "typescript": "^5.5.4",
+    "ui5-tooling-transpile": "^3.2.5",
+    "@openui5/types": "^1.120.0"
+  }
+}
