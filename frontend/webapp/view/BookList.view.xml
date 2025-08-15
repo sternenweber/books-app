@@ -42,8 +42,6 @@
               <ToolbarSpacer />
               <Button text="Neu" icon="sap-icon://add" press=".onAdd"/>
               <Button text="Bearbeiten" icon="sap-icon://edit" press=".onEdit"/>
-              <Button text="Neu" icon="sap-icon://add" press=".onAdd"/>
-              <Button text="Bearbeiten" icon="sap-icon://edit" press=".onEdit"/>
             </Toolbar>
           </headerToolbar>
           <columns>
