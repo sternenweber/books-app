@@ -50,6 +50,25 @@ def list_books(
         .all()
     )
 
+@router.get("/books/count")
+def count_books(
+    q: Optional[str] = Query(None, description="Case-insensitive search in title"),
+    created_from: Optional[date] = Query(None, description="YYYY-MM-DD inclusive start"),
+    created_to: Optional[date] = Query(None, description="YYYY-MM-DD inclusive end"),
+    db: Session = Depends(get_db),
+):
+    query = db.query(func.count(Book.id))
+
+    if q:
+        query = query.filter(func.lower(Book.title).like(f"%{q.lower()}%"))
+    if created_from:
+        query = query.filter(Book.created_at >= _start_of_day(created_from))
+    if created_to:
+        query = query.filter(Book.created_at < _end_of_day_exclusive(created_to))
+
+    total = query.scalar() or 0
+    return {"total": total}
+
 @router.get("/books/{book_id}", response_model=BookOut)
 def get_book(
     book_id: int = Path(..., ge=1),
@@ -117,3 +136,5 @@ def delete_book(
     db.delete(book)
     db.commit()
     return None
+
+
