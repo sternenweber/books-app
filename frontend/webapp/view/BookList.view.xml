@@ -1,0 +1,106 @@
+<mvc:View
+  controllerName="books-frontend.controller.BookList"
+  xmlns:mvc="sap.ui.core.mvc"
+  xmlns="sap.m"
+  xmlns:f="sap.ui.layout.form">
+  <App>
+    <Page title="{i18n>appTitle}">
+      <headerContent>
+        <Toolbar>
+          <Title text="Bücher Übersicht" />
+          <ToolbarSpacer />
+          <ObjectStatus id="healthStatus" text="Checking..." state="None" />
+        </Toolbar>
+      </headerContent>
+
+      <content>
+        <Table id="booksTable"
+               inset="false"
+               mode="SingleSelectMaster"
+               noDataText="Keine Bücher gefunden"
+               items="{/books}">
+          <headerToolbar>
+            <Toolbar>
+              <SearchField id="search"
+                           width="20rem"
+                           placeholder="Titel suchen"
+                           search=".onSearch"
+                           liveChange=".onLiveChange"/>
+              <ToolbarSpacer />
+              <DatePicker id="dpFrom"
+                placeholder="Von (Angelegt am)"
+                displayFormat="long"
+                valueFormat="yyyy-MM-dd"
+                change=".onDateChanged"/>
+              <DatePicker id="dpTo"
+                placeholder="Bis (Angelegt am)"
+                displayFormat="long"
+                valueFormat="yyyy-MM-dd"
+                change=".onDateChanged"/>
+
+              <Button text="Zurücksetzen" press=".onClearFilters" />
+              <ToolbarSpacer />
+              <Button text="Neu" icon="sap-icon://add" press=".onAdd"/>
+              <Button text="Bearbeiten" icon="sap-icon://edit" press=".onEdit"/>
+              <Button text="Neu" icon="sap-icon://add" press=".onAdd"/>
+              <Button text="Bearbeiten" icon="sap-icon://edit" press=".onEdit"/>
+            </Toolbar>
+          </headerToolbar>
+          <columns>
+            <Column><Text text="Titel" /></Column>
+            <Column><Text text="Autor" /></Column>
+            <Column><Text text="Angelegt am" /></Column>
+            <Column><Text text="Angelegt von" /></Column>
+          </columns>
+          <items>
+            <ColumnListItem>
+              <cells>
+                <Text text="{title}" />
+                <Text text="{author}" />
+                <Text text="{ path: 'created_at', type: 'sap.ui.model.type.DateTime', 
+                formatOptions: { style: 'medium' } }" />
+                <Text text="{created_by}" />
+              </cells>
+            </ColumnListItem>
+          </items>
+        </Table>
+        <Dialog id="editDialog" title="Buch bearbeiten" class="sapUiContentPadding">
+          <content>
+            <f:SimpleForm editable="true" layout="ResponsiveGridLayout">
+              <Label text="Titel"/>
+              <Input value="{edit>/title}" required="true"/>
+              <Label text="Autor"/>
+              <Input value="{edit>/author}" required="true"/>
+              <Label text="Angelegt von"/>
+              <Input value="{edit>/created_by}"/>
+            </f:SimpleForm>
+          </content>
+          <beginButton>
+            <Button text="Speichern" type="Emphasized" press=".onSaveEdit"/>
+          </beginButton>
+          <endButton>
+            <Button text="Abbrechen" press=".onCancelEdit"/>
+          </endButton>
+        </Dialog>
+        <Dialog id="createDialog" title="Neues Buch" class="sapUiContentPadding">
+          <content>
+            <f:SimpleForm editable="true" layout="ResponsiveGridLayout">
+              <Label text="Titel"/>
+              <Input value="{create>/title}" required="true" />
+              <Label text="Autor"/>
+              <Input value="{create>/author}" required="true" />
+              <Label text="Angelegt von"/>
+              <Input value="{create>/created_by}" />
+            </f:SimpleForm>
+          </content>
+          <beginButton>
+            <Button text="Anlegen" type="Emphasized" press=".onSaveCreate"/>
+          </beginButton>
+          <endButton>
+            <Button text="Abbrechen" press=".onCancelCreate"/>
+          </endButton>
+        </Dialog>
+      </content>
+    </Page>
+  </App>
+</mvc:View>
