@@ -1,0 +1,58 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: books_db
+    env_file:
+      - ./db.env
+    ports:
+      - "5432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks: [appnet]
+
+  backend:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    container_name: books_backend
+    env_file:
+      - ../backend/.env
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+    networks: [appnet]
+    # ✅ run migrations + seed before starting uvicorn
+    command: >
+      sh -lc 'alembic upgrade head &&
+              python -m app.services.seed &&
+              uvicorn app.main:app --host 0.0.0.0 --port 8000'
+
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+    container_name: books_frontend
+    env_file:
+      - ../frontend/.env
+    depends_on:
+      - backend
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+    networks: [appnet]
+
+volumes:
+  db_data:
+
+networks:
+  appnet:
+    driver: bridge
