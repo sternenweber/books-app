@@ -230,9 +230,49 @@ export default class BookList extends Controller {
   }
 
   async onSaveEdit(): Promise<void> {
-    (this.byId("editDialog") as Dialog).close();
-    await this.refresh();
-    MessageToast.show("Book updated.");
+    const editModel = this.getView()?.getModel("edit") as JSONModel;
+    const payload = editModel.getData() as {
+      id: number;
+      title: string;
+      author: string;
+      created_by: string;
+    };
+
+    try {
+      const res = await fetch(`${this.baseUrl.replace(/\/+$/, "")}/api/books/${payload.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: payload.title,
+          author: payload.author,
+          created_by: payload.created_by,
+        }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+      const updated = await res.json();
+
+      const table = this.byId("booksTable") as Table;
+      const item = table.getSelectedItem();
+      const ctxPath = item?.getBindingContext()?.getPath(); 
+      const model = this.getView()?.getModel() as JSONModel;
+
+      if (ctxPath && model) {
+        model.setProperty(`${ctxPath}/title`, updated.title);
+        model.setProperty(`${ctxPath}/author`, updated.author);
+        model.setProperty(`${ctxPath}/created_by`, updated.created_by);
+        model.setProperty(`${ctxPath}/created_at`, updated.created_at ? new Date(updated.created_at) : null);
+        (model as any).checkUpdate(true);
+      } else {
+        await this.refresh();
+      }
+
+      (this.byId("editDialog") as Dialog).close();
+      MessageToast.show("Buch aktualisiert.");
+    } catch (e) {
+      console.error(e);
+      MessageToast.show("Fehler beim Aktualisieren des Buches.");
+    }
   }
 
   onCancelEdit(): void {
