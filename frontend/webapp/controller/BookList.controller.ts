@@ -5,17 +5,104 @@ import Dialog from "sap/m/Dialog";
 import Table from "sap/m/Table";
 import MessageToast from "sap/m/MessageToast";
 import DatePicker from "sap/m/DatePicker";
+import Select from "sap/m/Select";
 
 declare global { interface Window { __API_BASE_URL?: string; } }
 
 export default class BookList extends Controller {
   private _debounce?: number;
 
+  private _page = 1;
+  private _pageSizeKey: "10" | "25" | "50" | "alle" = "10";
+  private _pageSize = 10;
+  private _total = 0;
+
   onInit(): void {
     void this.checkHealth();
-    void this.loadBooks(); 
+
+    this.getView()?.addEventDelegate({
+      onAfterRendering: () => {
+        const sel = this.byId("pageSize") as Select;
+        sel?.setSelectedKey(this._pageSizeKey);
+      }
+    });
+
     this.getView()?.setModel(new JSONModel({}), "edit");
     this.getView()?.setModel(new JSONModel({}), "create");
+
+    void this.refresh();
+  }
+
+  private _recomputePageSize(): void {
+    if (this._pageSizeKey === "alle") {
+      this._pageSize = Math.max(1, this._total); 
+      this._page = 1; 
+    } else {
+      this._pageSize = parseInt(this._pageSizeKey, 10);
+    }
+  }
+
+  private async fetchTotal(q?: string, from?: string, to?: string): Promise<number> {
+    const base = this.baseUrl.replace(/\/+$/, "");
+    const url = new URL("/api/books/count", base);
+    if (q && q.trim()) url.searchParams.set("q", q.trim());
+    if (from) url.searchParams.set("created_from", from);
+    if (to) url.searchParams.set("created_to", to);
+    const res = await fetch(url.toString());
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const { total } = await res.json();
+    return total ?? 0;
+  }
+
+  private async loadBooksPage(q?: string, from?: string, to?: string): Promise<void> {
+    const base = this.baseUrl.replace(/\/+$/, "");
+    const url = new URL("/api/books", base);
+    if (q && q.trim()) url.searchParams.set("q", q.trim());
+    if (from) url.searchParams.set("created_from", from);
+    if (to) url.searchParams.set("created_to", to);
+
+    const limitForRequest = this._pageSizeKey === "alle" ? this._total || 1 : this._pageSize;
+    const offsetForRequest = this._pageSizeKey === "alle" ? 0 : (this._page - 1) * this._pageSize;
+
+    url.searchParams.set("limit", String(limitForRequest));
+    url.searchParams.set("offset", String(offsetForRequest));
+
+    const res = await fetch(url.toString());
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+
+    const items = data.map((b: any) => ({
+      ...b,
+      created_at: b.created_at ? new Date(b.created_at) : null
+    }));
+
+    const model = new JSONModel({ books: items });
+    model.setSizeLimit(100000); 
+    this.getView()?.setModel(model);
+  }
+
+  private updatePagerUI(): void {
+    const totalPages =
+      this._pageSizeKey === "alle" ? 1 : Math.max(1, Math.ceil(this._total / this._pageSize));
+
+    (this.byId("pageInfo") as any)?.setText?.(`Seite ${this._page} von ${totalPages}`);
+    (this.byId("btnPrev") as any)?.setEnabled?.(this._page > 1 && this._pageSizeKey !== "alle");
+    (this.byId("btnNext") as any)?.setEnabled?.(this._page < totalPages && this._pageSizeKey !== "alle");
+  }
+
+  private async refresh(): Promise<void> {
+  const q = this.getSearchText();
+  const { from, to } = this.getDateRange();
+
+  this._total = await this.fetchTotal(q, from, to);
+  this._recomputePageSize();
+
+  const totalPages =
+    this._pageSizeKey === "alle" ? 1 : Math.max(1, Math.ceil(this._total / this._pageSize));
+    if (this._page > totalPages) this._page = totalPages;
+
+    await this.loadBooksPage(q, from, to); 
+    this.updatePagerUI(); 
   }
 
   private get baseUrl(): string {
@@ -29,8 +116,13 @@ export default class BookList extends Controller {
   private getDateRange(): { from?: string; to?: string } {
     const dpFrom = this.byId("dpFrom") as DatePicker;
     const dpTo = this.byId("dpTo") as DatePicker;
-    const from = dpFrom?.getValue() || undefined;
-    const to = dpTo?.getValue() || undefined;
+
+    const fromVal = dpFrom?.getValue();
+    const toVal = dpTo?.getValue();
+
+    const from = fromVal && fromVal.trim() !== "" ? fromVal : undefined;
+    const to = toVal && toVal.trim() !== "" ? toVal : undefined;
+
     return { from, to };
   }
 
@@ -69,30 +161,52 @@ export default class BookList extends Controller {
   }
 
   onSearch(e: any): void {
-    const q = e.getParameter("query") ?? this.getSearchText();
-    const { from, to } = this.getDateRange();
-    void this.loadBooks(q, from, to);
+    this._page = 1;
+    void this.refresh();
   }
 
   onLiveChange(e: any): void {
-    const q = e.getParameter("newValue") ?? "";
-    const { from, to } = this.getDateRange();
-    if (this._debounce) { window.clearTimeout(this._debounce); }
-    this._debounce = window.setTimeout(() => { void this.loadBooks(q, from, to); }, 300);
+    if (this._debounce) window.clearTimeout(this._debounce);
+    this._debounce = window.setTimeout(() => {
+      this._page = 1;
+      void this.refresh();
+    }, 300);
   }
 
-  onDateChanged(): void {
-    const q = this.getSearchText();
-    const { from, to } = this.getDateRange();
-    void this.loadBooks(q, from, to);
+   onDateChanged(): void {
+    this._page = 1;
+    void this.refresh();
   }
 
   onClearFilters(): void {
-    const dpFrom = this.byId("dpFrom") as DatePicker;
-    const dpTo = this.byId("dpTo") as DatePicker;
-    dpFrom?.setValue("");
-    dpTo?.setValue("");
-    void this.loadBooks(this.getSearchText(), undefined, undefined);
+    (this.byId("dpFrom") as DatePicker)?.setValue("");
+    (this.byId("dpTo") as DatePicker)?.setValue("");
+    this._page = 1;
+    void this.refresh();
+  }
+
+  onPageSizeChange(e: any): void {
+    const key = e.getSource().getSelectedKey?.() as "10" | "25" | "50" | "alle";
+    this._pageSizeKey = key || "10";
+    this._page = 1;
+    void this.refresh();
+  }
+
+  onPrevPage(): void {
+    if (this._pageSizeKey === "alle") return; 
+    if (this._page > 1) {
+      this._page -= 1;
+      void this.refresh();
+    }
+  }
+
+  onNextPage(): void {
+    if (this._pageSizeKey === "alle") return; 
+    const totalPages = Math.max(1, Math.ceil(this._total / this._pageSize));
+    if (this._page < totalPages) {
+      this._page += 1;
+      void this.refresh();
+    }
   }
 
    onEdit(): void {
@@ -111,30 +225,9 @@ export default class BookList extends Controller {
   }
 
   async onSaveEdit(): Promise<void> {
-    const editModel = this.getView()?.getModel("edit") as JSONModel;
-    const payload = editModel.getData() as { id: number; title: string; author: string; created_by: string };
-
-    try {
-      const res = await fetch(`${this.baseUrl}/api/books/${payload.id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title: payload.title,
-          author: payload.author,
-          created_by: payload.created_by
-        })
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
-      (this.byId("editDialog") as Dialog).close();
-
-      await this.loadBooks((this.byId("search") as any)?.getValue?.());
-
-      MessageToast.show("Book updated.");
-    } catch (e) {
-      console.error(e);
-      MessageToast.show("Failed to update book.");
-    }
+    (this.byId("editDialog") as Dialog).close();
+    await this.refresh();
+    MessageToast.show("Book updated.");
   }
 
   onCancelEdit(): void {
@@ -148,36 +241,9 @@ export default class BookList extends Controller {
   }
 
   async onSaveCreate(): Promise<void> {
-    const createModel = this.getView()?.getModel("create") as JSONModel;
-    const payload = createModel.getData() as { title: string; author: string; created_by?: string };
-
-    if (!payload.title?.trim() || !payload.author?.trim()) {
-      MessageToast.show("Bitte Titel und Autor ausfüllen.");
-      return;
-    }
-
-    try {
-      const res = await fetch(`${this.baseUrl}/api/books`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title: payload.title.trim(),
-          author: payload.author.trim(),
-          created_by: payload.created_by?.trim() || "system"
-        })
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
-      (this.byId("createDialog") as Dialog).close();
-
-      const q = (this.byId("search") as any)?.getValue?.();
-      await this.loadBooks(q);
-
-      MessageToast.show("Buch angelegt.");
-    } catch (e) {
-      console.error(e);
-      MessageToast.show("Buch konnte nicht angelegt werden.");
-    }
+    (this.byId("createDialog") as Dialog).close();
+    await this.refresh();
+    MessageToast.show("Buch angelegt.");
   }
 
   onCancelCreate(): void {
