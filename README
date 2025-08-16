@@ -1,0 +1,78 @@
+# Book Management Application
+
+A full-stack project for managing books with filtering, searching, pagination, and CRUD operations.  
+Built with **FastAPI + SQLAlchemy** on the backend and **SAPUI5/OpenUI5** on the frontend.
+
+---
+
+## Features
+
+- **Health Check:** Verify backend availability  
+- **Book Management:**
+  - Create new books  
+  - Edit existing books  
+  - Delete books  
+  - View details  
+- **Search & Filter:**
+  - Search by title (case-insensitive)  
+  - Filter by creation date range  
+- **Pagination:**
+  - Select page size: 10, 25, 50, or All  
+  - Navigate between pages  
+- **Responsive UI:** Built with SAPUI5 table, dialogs, and toolbars  
+
+---
+
+## Tech Stack
+
+- **Backend:** FastAPI, SQLAlchemy, PostgreSQL/SQLite  
+- **Frontend:** SAPUI5 / OpenUI5, TypeScript  
+- **Database:** SQLAlchemy ORM with Alembic migrations  
+- **API:** RESTful JSON endpoints  
+
+---
+
+## Run the Stack
+
+### Requirements
+- Ensure **Docker Desktop** is running
+- Run the docker commands in `ops/` directory. 
+
+### Start the application
+```bash
+docker compose up --build
+```
+
+---
+
+### Useful Commands
+
+**Stop containers**
+```bash
+docker compose down
+```
+
+**Stop and remove containers + DB volume (⚠️ erases data)**
+```bash
+docker compose down -v
+```
+
+**View logs (e.g., backend)**
+```bash
+docker compose logs -f backend
+```
+
+---
+
+## Access the Application
+
+Frontend: `http://localhost:8080`
+
+Backend API Docs: `http://localhost:8000/docs`
+
+---
+
+## Info
+
+On behalf of **DHC Group**
+Developer: **Ali Khavari**
