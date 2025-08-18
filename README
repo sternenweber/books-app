@@ -34,11 +34,8 @@ Built with **FastAPI + SQLAlchemy** on the backend and **SAPUI5/OpenUI5** on the
 
 ## Run the Stack
 
-### Requirements
-- Ensure **Docker Desktop** is running
-- Run the docker commands in `ops/` directory. 
-
 ### Start the application
+In `ops/` directory, run
 ```bash
 docker compose up --build
 ```
