@@ -28,9 +28,12 @@ services:
         condition: service_healthy
     ports:
       - "8000:8000"
+    volumes:
+      - ../backend:/app
+    working_dir: /app
     restart: unless-stopped
     networks: [appnet]
-    # ✅ run migrations + seed before starting uvicorn
+    # run migrations + seed before starting uvicorn
     command: >
       sh -lc 'alembic upgrade head &&
               python -m app.services.seed &&
@@ -39,7 +42,6 @@ services:
   frontend:
     build:
       context: ../frontend
-      dockerfile: Dockerfile
     container_name: books_frontend
     env_file:
       - ../frontend/.env
