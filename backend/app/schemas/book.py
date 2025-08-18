@@ -1,8 +1,8 @@
 from __future__ import annotations
 from datetime import datetime
 from typing import Optional
-
 from pydantic import BaseModel, ConfigDict, Field
+
 
 class BookOut(BaseModel):
     id: int
@@ -10,8 +10,11 @@ class BookOut(BaseModel):
     author: str
     created_at: datetime
     created_by: str
+    deleted_at: Optional[datetime] = None
+    deleted_by: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
+
 
 class BookCreate(BaseModel):
     title: str = Field(min_length=1, max_length=255, description="Book title")
@@ -21,6 +24,7 @@ class BookCreate(BaseModel):
     )
 
     model_config = ConfigDict(extra="forbid")
+
 
 class BookUpdate(BaseModel):
     title: Optional[str] = Field(default=None, min_length=1, max_length=255)
