@@ -4,65 +4,115 @@
   xmlns="sap.m"
   xmlns:f="sap.ui.layout.form"
   xmlns:core="sap.ui.core">
+
   <App>
     <Page title="{i18n>appTitle}">
-      <headerContent>
-        <Toolbar>
-          <Title text="Bücher Übersicht" />
-          <ToolbarSpacer />
-          <ObjectStatus id="healthStatus" text="Checking..." state="None" />
+      <customHeader>
+        <Bar>
+          <contentLeft>
+            <Title text="Bücher Übersicht" level="H2" class="boldPageTitle"/>
+          </contentLeft>
+
+          <contentRight>
+            <ObjectStatus id="healthStatus" text="Checking..." state="None" class="sapUiTinyMarginEnd"/>
+            <Button text="Neu" icon="sap-icon://add" type="Emphasized" press=".onAdd"/>
+            <Button text="Bearbeiten" icon="sap-icon://edit" press=".onEdit"/>
+            <Button text="Löschen" icon="sap-icon://delete" press=".onDelete"/>
+          </contentRight>
+        </Bar>
+      </customHeader>
+
+      <subHeader>
+        <Toolbar design="Transparent">
+          <SearchField id="search"
+                       width="20rem"
+                       placeholder="Titel suchen"
+                       search=".onSearch"
+                       liveChange=".onLiveChange"/>
+          <ToolbarSpacer/>
+          <DatePicker id="dpFrom"
+                      placeholder="Von (Angelegt am)"
+                      displayFormat="long"
+                      valueFormat="yyyy-MM-dd"
+                      change=".onDateChanged"/>
+          <DatePicker id="dpTo"
+                      placeholder="Bis (Angelegt am)"
+                      displayFormat="long"
+                      valueFormat="yyyy-MM-dd"
+                      change=".onDateChanged"/>
+          <Button text="Zurücksetzen" press=".onClearFilters"/>
         </Toolbar>
-      </headerContent>
+      </subHeader>
 
       <content>
-        <Table id="booksTable"
-               inset="false"
-               mode="SingleSelectMaster"
-               noDataText="Keine Bücher gefunden"
-               items="{/books}">
-          <headerToolbar>
-            <Toolbar>
-              <SearchField id="search"
-                           width="20rem"
-                           placeholder="Titel suchen"
-                           search=".onSearch"
-                           liveChange=".onLiveChange"/>
-              <ToolbarSpacer />
-              <DatePicker id="dpFrom"
-                placeholder="Von (Angelegt am)"
-                displayFormat="long"
-                valueFormat="yyyy-MM-dd"
-                change=".onDateChanged"/>
-              <DatePicker id="dpTo"
-                placeholder="Bis (Angelegt am)"
-                displayFormat="long"
-                valueFormat="yyyy-MM-dd"
-                change=".onDateChanged"/>
-
-              <Button text="Zurücksetzen" press=".onClearFilters" />
-              <ToolbarSpacer />
-              <Button text="Neu" icon="sap-icon://add" press=".onAdd"/>
-              <Button text="Bearbeiten" icon="sap-icon://edit" press=".onEdit"/>
-            </Toolbar>
-          </headerToolbar>
-          <columns>
-            <Column><Text text="Titel" /></Column>
-            <Column><Text text="Autor" /></Column>
-            <Column><Text text="Angelegt am" /></Column>
-            <Column><Text text="Angelegt von" /></Column>
-          </columns>
+        <IconTabBar id="tabBar" expandable="false" selectedKey="active" select=".onTabChange">
+          <!-- Active books -->
           <items>
-            <ColumnListItem>
-              <cells>
-                <Text text="{title}" />
-                <Text text="{author}" />
-                <Text text="{ path: 'created_at', type: 'sap.ui.model.type.DateTime', 
-                formatOptions: { style: 'medium' } }" />
-                <Text text="{created_by}" />
-              </cells>
-            </ColumnListItem>
+            <IconTabFilter key="active" text="Bücher">
+              <Table id="booksTable"
+                     inset="false"
+                     mode="SingleSelectMaster"
+                     noDataText="Keine Bücher gefunden"
+                     items="{/books}">
+
+                <columns>
+                  <Column><Text text="Titel"/></Column>
+                  <Column><Text text="Autor"/></Column>
+                  <Column><Text text="Angelegt am"/></Column>
+                  <Column><Text text="Angelegt von"/></Column>
+                </columns>
+
+                <items>
+                  <ColumnListItem>
+                    <cells>
+                      <Text text="{title}"/>
+                      <Text text="{author}"/>
+                      <Text text="{ path: 'created_at', type: 'sap.ui.model.type.DateTime',
+                                    formatOptions: { style: 'medium' } }"/>
+                      <Text text="{created_by}"/>
+                    </cells>
+                  </ColumnListItem>
+                </items>
+              </Table>
+            </IconTabFilter>
+
+            <!-- Korb (deleted books) -->
+            <IconTabFilter key="trash" text="Korb">
+              <Table id="trashTable"
+                     inset="false"
+                     mode="SingleSelectMaster"
+                     noDataText="Keine gelöschten Bücher gefunden"
+                     items="{trash>/books}">
+
+                <columns>
+                  <Column><Text text="Titel"/></Column>
+                  <Column><Text text="Autor"/></Column>
+                  <Column><Text text="Gelöscht am"/></Column>
+                  <Column><Text text="Angelegt von"/></Column>
+                </columns>
+
+                <items>
+                  <ColumnListItem>
+                    <cells>
+                      <Text text="{trash>title}"/>
+                      <Text text="{trash>author}"/>
+                      <Text text="{ path: 'trash>deleted_at', type: 'sap.ui.model.type.DateTime',
+                                    formatOptions: { style: 'medium' } }"/>
+                      <Text text="{trash>created_by}"/>
+                    </cells>
+                  </ColumnListItem>
+                </items>
+              </Table>
+
+              <Toolbar>
+                <Button id="btnRestore" text="Wiederherstellen" icon="sap-icon://undo" press=".onRestore" enabled="false"/>
+                <Button id="btnHardDelete" text="Endgültig löschen" icon="sap-icon://sys-cancel" press=".onHardDelete" enabled="false"/>
+              </Toolbar>
+            </IconTabFilter>
           </items>
-        </Table>
+        </IconTabBar>
+
+        <!-- Edit Dialog -->
         <Dialog id="editDialog" title="Buch bearbeiten" class="sapUiContentPadding">
           <content>
             <f:SimpleForm editable="true" layout="ResponsiveGridLayout">
@@ -81,15 +131,17 @@
             <Button text="Abbrechen" press=".onCancelEdit"/>
           </endButton>
         </Dialog>
+
+        <!-- Create Dialog -->
         <Dialog id="createDialog" title="Neues Buch" class="sapUiContentPadding">
           <content>
             <f:SimpleForm editable="true" layout="ResponsiveGridLayout">
               <Label text="Titel"/>
-              <Input value="{create>/title}" required="true" />
+              <Input value="{create>/title}" required="true"/>
               <Label text="Autor"/>
-              <Input value="{create>/author}" required="true" />
+              <Input value="{create>/author}" required="true"/>
               <Label text="Angelegt von"/>
-              <Input value="{create>/created_by}" />
+              <Input value="{create>/created_by}"/>
             </f:SimpleForm>
           </content>
           <beginButton>
@@ -100,24 +152,25 @@
           </endButton>
         </Dialog>
       </content>
+
       <footer>
         <Toolbar>
-          <Button id="btnPrev" text="Zurück" press=".onPrevPage" />
-          <Button id="btnNext" text="Weiter" press=".onNextPage" />
-          <Text id="pageInfo" text="Seite 1 von 1" />
-          <ToolbarSpacer />
-
+          <Button id="btnPrev" text="Zurück" press=".onPrevPage"/>
+          <Button id="btnNext" text="Weiter" press=".onNextPage"/>
+          <Text id="pageInfo" text="Seite 1 von 1"/>
+          <ToolbarSpacer/>
           <Label text="Pro Seite:"/>
           <Select id="pageSize" width="7rem" change=".onPageSizeChange">
             <items>
-              <core:Item key="10" text="10" />
-              <core:Item key="25" text="25" />
-              <core:Item key="50" text="50" />
-              <core:Item key="alle" text="Alle" />
+              <core:Item key="10" text="10"/>
+              <core:Item key="25" text="25"/>
+              <core:Item key="50" text="50"/>
+              <core:Item key="alle" text="Alle"/>
             </items>
           </Select>
         </Toolbar>
       </footer>
+
     </Page>
   </App>
 </mvc:View>
