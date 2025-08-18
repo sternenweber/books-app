@@ -4,7 +4,6 @@ from sqlalchemy import DateTime, String, func, Index
 from sqlalchemy.orm import Mapped, mapped_column
 from app.db.base import Base
 
-
 class Book(Base):
     __tablename__ = "book"
 
@@ -19,9 +18,17 @@ class Book(Base):
     )
     created_by: Mapped[str] = mapped_column(String(255), nullable=False)
 
+    deleted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        index=True,
+        default=None
+    )
+    deleted_by: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
     __table_args__ = (
-        Index("ix_book_title_lower", func.lower(title)),
+        Index("ix_book_title_lower", func.lower(title)),  
     )
 
     def __repr__(self) -> str:
-        return f"<Book id={self.id} title={self.title!r}>"
+        return f"<Book id={self.id} title={self.title!r} deleted_at={self.deleted_at} deleted_by={self.deleted_by}>"
