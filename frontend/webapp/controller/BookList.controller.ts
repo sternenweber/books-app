@@ -267,15 +267,31 @@ export default class BookList extends Controller {
 
   async onSaveEdit(): Promise<void> {
     const editModel = this.getView()?.getModel("edit") as JSONModel;
-    const payload = editModel.getData() as { id: number; title: string; author: string; created_by: string };
+    const payload = editModel.getData() as {
+      id: number;
+      title?: string;
+      author?: string;
+      created_by?: string | null;
+    };
+
+    const body: Record<string, any> = {};
+    if (payload.title !== undefined)  body.title  = payload.title.trim();
+    if (payload.author !== undefined) body.author = payload.author.trim();
+    if (payload.created_by !== undefined && payload.created_by !== null) {
+      body.created_by = payload.created_by.trim();
+    }
 
     try {
       const res = await fetch(`${this.baseUrl}/api/books/${payload.id}`, {
-        method: "PUT",
+        method: "PUT",                  
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(body),
       });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+      if (!res.ok) {
+        const detail = await res.text();
+        throw new Error(`HTTP ${res.status}: ${detail}`);
+      }
 
       (this.byId("editDialog") as Dialog).close();
       await this.refresh();
