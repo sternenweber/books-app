@@ -330,6 +330,9 @@ export default class BookList extends Controller {
     const model = new JSONModel({ books: items });
     model.setSizeLimit(100000);
     this.getView()?.setModel(model, "trash");
+    
+    (this.byId("trashTable") as Table)?.removeSelections?.();
+    this._setTrashActionsEnabled(false);
   }
 
   onShowTrash(): void {
@@ -343,6 +346,7 @@ export default class BookList extends Controller {
 
   if (this._showTrash) {
     void this.loadDeletedBooks();
+    this._setTrashActionsEnabled(false);
   } else {
     this._page = 1;
     void this.refresh();
@@ -364,6 +368,8 @@ export default class BookList extends Controller {
   
     await this.refresh();
     await this.loadDeletedBooks();
+    (this.byId("trashTable") as Table)?.removeSelections?.();
+    this._setTrashActionsEnabled(false);
   }
 
   async onHardDelete(): Promise<void> {
@@ -379,12 +385,34 @@ export default class BookList extends Controller {
       actions: [MessageBox.Action.OK, MessageBox.Action.CANCEL],
       onClose: async (action: any) => {
         if (action === MessageBox.Action.OK) {
-          // (If you later add a real hard-delete endpoint, call it here.
-          // For now, you can keep soft-delete only, or implement a /books/{id}/hard_delete.)
-          MessageToast.show("Noch nicht implementiert.");
+          try {
+            const res = await fetch(`${this.baseUrl}/api/books/${data.id}/hard_delete`, {
+              method: "DELETE"
+            });
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+            MessageToast.show("Buch endgültig gelöscht.");
+            await this.refresh();          
+            await this.loadDeletedBooks();
+            (this.byId("trashTable") as Table)?.removeSelections?.();
+            this._setTrashActionsEnabled(false);
+          } catch (e) {
+            console.error(e);
+            MessageToast.show("Endgültiges Löschen fehlgeschlagen.");
+          }
         }
       }
     });
+  }
+  private _setTrashActionsEnabled(enabled: boolean): void {
+    (this.byId("btnRestore") as any)?.setEnabled(enabled);
+    (this.byId("btnHardDelete") as any)?.setEnabled(enabled);
+  }
+
+  onTrashSelectionChange(): void {
+    const table = this.byId("trashTable") as Table;
+    const hasSelection = !!table.getSelectedItem();
+    this._setTrashActionsEnabled(hasSelection);
   }
 
   onToggleTrash(): void {

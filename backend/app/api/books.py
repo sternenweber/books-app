@@ -211,3 +211,19 @@ def delete_book(
     db.commit()
     return None
 
+@router.delete("/books/{book_id}/hard_delete", status_code=204)
+def hard_delete_book(
+    book_id: int = Path(..., ge=1),
+    db: Session = Depends(get_db),
+):
+    book = db.get(Book, book_id)
+    if not book:
+        raise HTTPException(status_code=404, detail="Book not found")
+    if book.deleted_at is None:
+        raise HTTPException(status_code=409, detail="Book must be in trash before hard delete")
+
+    db.delete(book)
+    db.commit()
+    return None
+
+

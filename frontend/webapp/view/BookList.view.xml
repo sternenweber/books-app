@@ -82,7 +82,8 @@
                      inset="false"
                      mode="SingleSelectMaster"
                      noDataText="Keine gelöschten Bücher gefunden"
-                     items="{trash>/books}">
+                     items="{trash>/books}"
+                     selectionChange=".onTrashSelectionChange">
 
                 <columns>
                   <Column><Text text="Titel"/></Column>
