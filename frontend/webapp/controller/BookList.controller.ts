@@ -10,14 +10,25 @@ import MessageBox from "sap/m/MessageBox";
 
 declare global { interface Window { __API_BASE_URL?: string; } }
 
+type PageSizeKey = "10" | "25" | "50" | "alle";
+
+type TabKey = "active" | "trash";
+type TabState = {
+  page: number;
+  pageSizeKey: PageSizeKey;
+  pageSize: number;
+  total: number;
+};
+
 export default class BookList extends Controller {
   private _debounce?: number;
-  private _page = 1;
-  private _pageSizeKey: "10" | "25" | "50" | "alle" = "10";
-  private _pageSize = 10;
-  private _total = 0;
 
-  private _showTrash = false;
+  private _state: Record<TabKey, TabState> = {
+    active: { page: 1, pageSizeKey: "10", pageSize: 10, total: 0 },
+    trash:  { page: 1, pageSizeKey: "10", pageSize: 10, total: 0 },
+  };
+
+  private _currentTab: TabKey = "active";
 
   onInit(): void {
     void this.checkHealth();
@@ -25,7 +36,7 @@ export default class BookList extends Controller {
     this.getView()?.addEventDelegate({
       onAfterRendering: () => {
         const sel = this.byId("pageSize") as Select;
-        sel?.setSelectedKey(this._pageSizeKey);
+        sel?.setSelectedKey(this.curr().pageSizeKey);
       }
     });
 
@@ -35,84 +46,22 @@ export default class BookList extends Controller {
     void this.refresh();
   }
 
-  private _recomputePageSize(): void {
-    if (this._pageSizeKey === "alle") {
-      this._pageSize = Math.max(1, this._total);
-      this._page = 1;
+  private curr(): TabState {
+    return this._state[this._currentTab];
+  }
+
+  private setCurr(next: Partial<TabState>): void {
+    Object.assign(this.curr(), next);
+  }
+
+  private _recomputePageSizeFor(tab: TabKey): void {
+    const st = this._state[tab];
+    if (st.pageSizeKey === "alle") {
+      st.pageSize = Math.max(1, st.total);
+      st.page = 1;
     } else {
-      this._pageSize = parseInt(this._pageSizeKey, 10);
+      st.pageSize = parseInt(st.pageSizeKey, 10);
     }
-  }
-
-  private async fetchTotal(q?: string, from?: string, to?: string): Promise<number> {
-    const base = this.baseUrl.replace(/\/+$/, "");
-    const path = this._showTrash ? "/api/books/trash/count" : "/api/books/count";
-    const url = new URL(path, base);
-    if (q && q.trim()) url.searchParams.set("q", q.trim());
-    if (from) url.searchParams.set("created_from", from);
-    if (to) url.searchParams.set("created_to", to);
-    const res = await fetch(url.toString());
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const { total } = await res.json();
-    return total ?? 0;
-  }
-
-  private async loadBooksPage(q?: string, from?: string, to?: string): Promise<void> {
-    const base = this.baseUrl.replace(/\/+$/, "");
-    const url = new URL(this._showTrash ? "/api/books/trash" : "/api/books", base);
-    if (q && q.trim()) url.searchParams.set("q", q.trim());
-    if (from) url.searchParams.set("created_from", from);
-    if (to) url.searchParams.set("created_to", to);
-
-    const limitForRequest = this._pageSizeKey === "alle" ? this._total || 1 : this._pageSize;
-    const offsetForRequest = this._pageSizeKey === "alle" ? 0 : (this._page - 1) * this._pageSize;
-
-    url.searchParams.set("limit", String(limitForRequest));
-    url.searchParams.set("offset", String(offsetForRequest));
-
-    const res = await fetch(url.toString());
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
-
-    const items = data.map((b: any) => ({
-      ...b,
-      created_at: b.created_at ? new Date(b.created_at) : null
-    }));
-
-    const model = new JSONModel({ books: items });
-    model.setSizeLimit(100000);
-    this.getView()?.setModel(model);
-  }
-
-  private updatePagerUI(): void {
-    const start = this._total === 0 ? 0 : ((this._page - 1) * this._pageSize) + 1;
-    const end = this._pageSizeKey === "alle"
-      ? this._total
-      : Math.min(this._page * this._pageSize, this._total);
-
-    (this.byId("pageInfo") as any)?.setText?.(
-      `${this._showTrash ? "Korb" : "Bücher"} ${start}–${end} von ${this._total}`
-    );
-
-    (this.byId("btnPrev") as any)?.setEnabled?.(this._page > 1 && this._pageSizeKey !== "alle");
-    (this.byId("btnNext") as any)?.setEnabled?.(
-      end < this._total && this._pageSizeKey !== "alle"
-    );
-  }
-
-  private async refresh(): Promise<void> {
-    const q = this.getSearchText();
-    const { from, to } = this.getDateRange();
-
-    this._total = await this.fetchTotal(q, from, to);
-    this._recomputePageSize();
-
-    const totalPages =
-      this._pageSizeKey === "alle" ? 1 : Math.max(1, Math.ceil(this._total / this._pageSize));
-    if (this._page > totalPages) this._page = totalPages;
-
-    await this.loadBooksPage(q, from, to);
-    this.updatePagerUI();
   }
 
   private get baseUrl(): string {
@@ -149,53 +98,156 @@ export default class BookList extends Controller {
       statusCtrl.setState("Error");
     }
   }
+
+  private async fetchTotal(tab: TabKey, q?: string, from?: string, to?: string): Promise<number> {
+    const base = this.baseUrl.replace(/\/+$/, "");
+    const path = tab === "trash" ? "/api/books/trash/count" : "/api/books/count";
+    const url = new URL(path, base);
+    if (q && q.trim()) url.searchParams.set("q", q.trim());
+    if (from) url.searchParams.set(tab === "trash" ? "deleted_from" : "created_from", from);
+    if (to) url.searchParams.set(tab === "trash" ? "deleted_to" : "created_to", to);
+
+    const res = await fetch(url.toString());
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const { total } = await res.json();
+    return total ?? 0;
+  }
+
+  private async loadPage(tab: TabKey, q?: string, from?: string, to?: string): Promise<void> {
+    const st = this._state[tab];
+    const base = this.baseUrl.replace(/\/+$/, "");
+    const url = new URL(tab === "trash" ? "/api/books/trash" : "/api/books", base);
+
+    if (q && q.trim()) url.searchParams.set("q", q.trim());
+    if (from) url.searchParams.set(tab === "trash" ? "deleted_from" : "created_from", from);
+    if (to) url.searchParams.set(tab === "trash" ? "deleted_to" : "created_to", to);
+
+    const limit = st.pageSizeKey === "alle" ? st.total || 1 : st.pageSize;
+    const offset = st.pageSizeKey === "alle" ? 0 : (st.page - 1) * st.pageSize;
+
+    url.searchParams.set("limit", String(limit));
+    url.searchParams.set("offset", String(offset));
+
+    const res = await fetch(url.toString());
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+
+    const items = data.map((b: any) => ({
+      ...b,
+      created_at: b.created_at ? new Date(b.created_at) : null,
+      deleted_at: b.deleted_at ? new Date(b.deleted_at) : null
+    }));
+
+    if (tab === "trash") {
+      const model = new JSONModel({ books: items });
+      model.setSizeLimit(100000);
+      this.getView()?.setModel(model, "trash");
+      (this.byId("trashTable") as Table)?.removeSelections?.();
+      this._setTrashActionsEnabled(false);
+    } else {
+      const model = new JSONModel({ books: items });
+      model.setSizeLimit(100000);
+      this.getView()?.setModel(model);
+    }
+  }
+
+  private updatePagerUI(): void {
+    const st = this.curr();
+    const start = st.total === 0 ? 0 : ((st.page - 1) * st.pageSize) + 1;
+    const end = st.pageSizeKey === "alle"
+      ? st.total
+      : Math.min(st.page * st.pageSize, st.total);
+
+    (this.byId("pageInfo") as any)?.setText?.(
+      `${this._currentTab === "trash" ? "Korb" : "Bücher"} ${start}–${end} von ${st.total}`
+    );
+
+    (this.byId("btnPrev") as any)?.setEnabled?.(st.page > 1 && st.pageSizeKey !== "alle");
+    (this.byId("btnNext") as any)?.setEnabled?.(end < st.total && st.pageSizeKey !== "alle");
+
+    const sel = this.byId("pageSize") as Select;
+    sel?.setSelectedKey(st.pageSizeKey);
+  }
+
+  private async refresh(): Promise<void> {
+    const tab = this._currentTab;
+    const q = this.getSearchText();
+    const { from, to } = this.getDateRange();
+
+    const total = await this.fetchTotal(tab, q, from, to);
+    this._state[tab].total = total;
+
+    this._recomputePageSizeFor(tab);
+
+    const st = this._state[tab];
+    const totalPages = st.pageSizeKey === "alle" ? 1 : Math.max(1, Math.ceil(st.total / st.pageSize));
+    if (st.page > totalPages) st.page = totalPages;
+
+    await this.loadPage(tab, q, from, to);
+    this.updatePagerUI();
+  }
+
   onSearch(): void {
-    this._page = 1;
+    this._state[this._currentTab].page = 1;
     void this.refresh();
   }
 
   onLiveChange(): void {
     if (this._debounce) window.clearTimeout(this._debounce);
     this._debounce = window.setTimeout(() => {
-      this._page = 1;
+      this._state[this._currentTab].page = 1;
       void this.refresh();
     }, 300);
   }
 
   onDateChanged(): void {
-    this._page = 1;
+    this._state[this._currentTab].page = 1;
     void this.refresh();
   }
 
   onClearFilters(): void {
     (this.byId("dpFrom") as DatePicker)?.setValue("");
     (this.byId("dpTo") as DatePicker)?.setValue("");
-    this._page = 1;
+    this._state[this._currentTab].page = 1;
     void this.refresh();
   }
 
   onPageSizeChange(e: any): void {
-    const key = e.getSource().getSelectedKey?.() as "10" | "25" | "50" | "alle";
-    this._pageSizeKey = key || "10";
-    this._page = 1;
+    const key = e.getSource().getSelectedKey?.() as PageSizeKey;
+    const st = this.curr();
+    st.pageSizeKey = key || "10";
+    st.page = 1;
+    this._recomputePageSizeFor(this._currentTab);
     void this.refresh();
   }
 
   onPrevPage(): void {
-    if (this._pageSizeKey === "alle") return;
-    if (this._page > 1) {
-      this._page -= 1;
+    const st = this.curr();
+    if (st.pageSizeKey === "alle") return;
+    if (st.page > 1) {
+      st.page -= 1;
       void this.refresh();
     }
   }
 
   onNextPage(): void {
-    if (this._pageSizeKey === "alle") return;
-    const totalPages = Math.max(1, Math.ceil(this._total / this._pageSize));
-    if (this._page < totalPages) {
-      this._page += 1;
+    const st = this.curr();
+    if (st.pageSizeKey === "alle") return;
+    const totalPages = Math.max(1, Math.ceil(st.total / st.pageSize));
+    if (st.page < totalPages) {
+      st.page += 1;
       void this.refresh();
     }
+  }
+
+  onTabChange(e: any): void {
+    const key = e.getParameter("key");
+    this._currentTab = key === "trash" ? "trash" : "active";
+
+    const sel = this.byId("pageSize") as Select;
+    sel?.setSelectedKey(this.curr().pageSizeKey);
+
+    void this.refresh();
   }
 
   onEdit(): void {
@@ -266,7 +318,7 @@ export default class BookList extends Controller {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
       (this.byId("createDialog") as Dialog).close();
-      this._page = 1;
+      this._state.active.page = 1; 
       await this.refresh();
       MessageToast.show("Buch angelegt.");
     } catch (e) {
@@ -295,12 +347,12 @@ export default class BookList extends Controller {
         if (action === MessageBox.Action.OK) {
           try {
             const res = await fetch(`${this.baseUrl}/api/books/${data.id}`, {
-            method: "DELETE"
-          });
-          if (!res.ok) throw new Error(`HTTP ${res.status}`);
-          await this.refresh();
-          MessageToast.show("Buch in den Korb verschoben.");
-        } catch (e) {
+              method: "DELETE"
+            });
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            await this.refresh();
+            MessageToast.show("Buch in den Korb verschoben.");
+          } catch (e) {
             console.error(e);
             MessageToast.show("Löschen fehlgeschlagen.");
           }
@@ -308,51 +360,6 @@ export default class BookList extends Controller {
       }
     });
   }
-
-  private async loadDeletedBooks(): Promise<void> {
-    const base = this.baseUrl.replace(/\/+$/, "");
-    const url = new URL("/api/books/trash", base);
-
-    const limitForRequest = this._pageSizeKey === "alle" ? this._total || 1 : this._pageSize;
-    const offsetForRequest = this._pageSizeKey === "alle" ? 0 : (this._page - 1) * this._pageSize;
-    url.searchParams.set("limit", String(limitForRequest));
-    url.searchParams.set("offset", String(offsetForRequest));
-
-    const res = await fetch(url.toString());
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
-
-    const items = data.map((b: any) => ({
-      ...b,
-      deleted_at: b.deleted_at ? new Date(b.deleted_at) : null
-    }));
-
-    const model = new JSONModel({ books: items });
-    model.setSizeLimit(100000);
-    this.getView()?.setModel(model, "trash");
-    
-    (this.byId("trashTable") as Table)?.removeSelections?.();
-    this._setTrashActionsEnabled(false);
-  }
-
-  onShowTrash(): void {
-    void this.loadDeletedBooks();
-    (this.byId("trashDialog") as Dialog).open();
-  }
-
-  onTabChange(e: any): void {
-  const key = e.getParameter("key"); 
-  this._showTrash = key === "trash";
-
-  if (this._showTrash) {
-    void this.loadDeletedBooks();
-    this._setTrashActionsEnabled(false);
-  } else {
-    this._page = 1;
-    void this.refresh();
-  }
-  this.updatePagerUI();
-}
 
   async onRestore(): Promise<void> {
     const table = this.byId("trashTable") as Table;
@@ -365,9 +372,13 @@ export default class BookList extends Controller {
     const res = await fetch(`${this.baseUrl}/api/books/${data.id}/restore`, { method: "PUT" });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     MessageToast.show("Buch wiederhergestellt.");
-  
+
+    await this.refresh(); 
+    const prevTab = this._currentTab;
+    this._currentTab = "active";
     await this.refresh();
-    await this.loadDeletedBooks();
+    this._currentTab = prevTab;
+
     (this.byId("trashTable") as Table)?.removeSelections?.();
     this._setTrashActionsEnabled(false);
   }
@@ -392,8 +403,7 @@ export default class BookList extends Controller {
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
             MessageToast.show("Buch endgültig gelöscht.");
-            await this.refresh();          
-            await this.loadDeletedBooks();
+            await this.refresh(); 
             (this.byId("trashTable") as Table)?.removeSelections?.();
             this._setTrashActionsEnabled(false);
           } catch (e) {
@@ -404,6 +414,7 @@ export default class BookList extends Controller {
       }
     });
   }
+
   private _setTrashActionsEnabled(enabled: boolean): void {
     (this.byId("btnRestore") as any)?.setEnabled(enabled);
     (this.byId("btnHardDelete") as any)?.setEnabled(enabled);
@@ -416,9 +427,8 @@ export default class BookList extends Controller {
   }
 
   onToggleTrash(): void {
-    this._showTrash = !this._showTrash;
-    this._page = 1;
+    this._currentTab = this._currentTab === "trash" ? "active" : "trash";
     void this.refresh();
-    MessageToast.show(this._showTrash ? "Korb geöffnet." : "Bücherübersicht geöffnet.");
+    MessageToast.show(this._currentTab === "trash" ? "Korb geöffnet." : "Bücherübersicht geöffnet.");
   }
 }
