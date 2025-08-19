@@ -12,9 +12,6 @@ from app.schemas.book import BookOut, BookCreate, BookUpdate
 
 router = APIRouter()
 
-# -------------------------
-# DB Dependency
-# -------------------------
 def get_db():
     db = SessionLocal()
     try:
@@ -22,9 +19,6 @@ def get_db():
     finally:
         db.close()
 
-# -------------------------
-# Helpers
-# -------------------------
 def _start_of_day(d: date) -> datetime:
     return datetime.combine(d, datetime.min.time()).replace(tzinfo=timezone.utc)
 
@@ -32,9 +26,6 @@ def _end_of_day_exclusive(d: date) -> datetime:
     next_day = d + timedelta(days=1)
     return datetime.combine(next_day, datetime.min.time()).replace(tzinfo=timezone.utc)
 
-# -------------------------
-# List Books (active + optional deleted)
-# -------------------------
 @router.get("/books", response_model=List[BookOut])
 def list_books(
     q: Optional[str] = Query(None, description="Case-insensitive search in title"),
@@ -65,9 +56,6 @@ def list_books(
         .all()
     )
 
-# -------------------------
-# Count Books
-# -------------------------
 @router.get("/books/count")
 def count_books(
     q: Optional[str] = Query(None, description="Case-insensitive search in title"),
@@ -91,6 +79,32 @@ def count_books(
     total = query.scalar() or 0
     return {"total": total}
 
+@router.get("/books/trash", response_model=List[BookOut])
+def list_trash(
+    q: Optional[str] = Query(None, description="Case-insensitive search in title"),
+    deleted_from: Optional[date] = Query(None, description="Deleted from (inclusive)"),
+    deleted_to: Optional[date] = Query(None, description="Deleted to (inclusive)"),
+    limit: int = Query(100, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db),
+):
+    query = db.query(Book).filter(Book.deleted_at.is_not(None))
+
+    if q:
+        query = query.filter(func.lower(Book.title).like(f"%{q.lower()}%"))
+
+    if deleted_from:
+        query = query.filter(Book.deleted_at >= _start_of_day(deleted_from))
+    if deleted_to:
+        query = query.filter(Book.deleted_at < _end_of_day_exclusive(deleted_to))
+
+    return (
+        query.order_by(Book.deleted_at.desc(), Book.id.desc())
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
+
 @router.get("/books/trash/count")
 def count_trash(
     q: Optional[str] = Query(None, description="Case-insensitive search in title"),
@@ -108,9 +122,22 @@ def count_trash(
     total = query.scalar() or 0
     return {"total": total}
 
-# -------------------------
-# Get Single Book
-# -------------------------
+@router.put("/books/{book_id}/restore", response_model=BookOut)
+def restore_book(
+    book_id: int = Path(..., ge=1),
+    db: Session = Depends(get_db),
+):
+    book = db.get(Book, book_id)
+    if not book or not book.deleted_at:
+        raise HTTPException(status_code=404, detail="Book not found or not deleted")
+
+    book.deleted_at = None
+    book.deleted_by = None
+    db.add(book)
+    db.commit()
+    db.refresh(book)
+    return book
+
 @router.get("/books/{book_id}", response_model=BookOut)
 def get_book(
     book_id: int = Path(..., ge=1),
@@ -122,9 +149,6 @@ def get_book(
         raise HTTPException(status_code=404, detail="Book not found")
     return book
 
-# -------------------------
-# Create
-# -------------------------
 @router.post("/books", response_model=BookOut, status_code=201)
 def create_book(
     payload: BookCreate,
@@ -152,9 +176,6 @@ def create_book(
     db.refresh(book)
     return book
 
-# -------------------------
-# Update
-# -------------------------
 @router.put("/books/{book_id}", response_model=BookOut)
 @router.patch("/books/{book_id}", response_model=BookOut)
 def update_book(
@@ -174,9 +195,6 @@ def update_book(
     db.refresh(book)
     return book
 
-# -------------------------
-# Soft Delete
-# -------------------------
 @router.delete("/books/{book_id}", status_code=204)
 def delete_book(
     book_id: int = Path(..., ge=1),
@@ -193,50 +211,3 @@ def delete_book(
     db.commit()
     return None
 
-# -------------------------
-# List Trash (deleted only)
-# -------------------------
-@router.get("/books/trash", response_model=List[BookOut])
-def list_trash(
-    q: Optional[str] = Query(None, description="Case-insensitive search in title"),
-    deleted_from: Optional[date] = Query(None, description="Deleted from (inclusive)"),
-    deleted_to: Optional[date] = Query(None, description="Deleted to (inclusive)"),
-    limit: int = Query(100, ge=1, le=500),
-    offset: int = Query(0, ge=0),
-    db: Session = Depends(get_db),
-):
-    query = db.query(Book).filter(Book.deleted_at.is_not(None))
-
-    if q:
-        query = query.filter(func.lower(Book.title).like(f"%{q.lower()}%"))
-
-    if deleted_from:
-        query = query.filter(Book.deleted_at >= _start_of_day(deleted_from))
-    if deleted_to:
-        query = query.filter(Book.deleted_at < _end_of_day_exclusive(deleted_to))
-
-    return (
-        query.order_by(Book.deleted_at.desc(), Book.id.desc())
-        .offset(offset)
-        .limit(limit)
-        .all()
-    )
-
-# -------------------------
-# Restore
-# -------------------------
-@router.put("/books/{book_id}/restore", response_model=BookOut)
-def restore_book(
-    book_id: int = Path(..., ge=1),
-    db: Session = Depends(get_db),
-):
-    book = db.get(Book, book_id)
-    if not book or not book.deleted_at:
-        raise HTTPException(status_code=404, detail="Book not found or not deleted")
-
-    book.deleted_at = None
-    book.deleted_by = None
-    db.add(book)
-    db.commit()
-    db.refresh(book)
-    return book
