@@ -11,7 +11,7 @@ Built with **FastAPI + SQLAlchemy** on the backend and **SAPUI5/OpenUI5** on the
 - **Book Management:**
   - Create new books  
   - Edit existing books  
-  - Delete books  
+  - Delete and restore books  
   - View details  
 - **Search & Filter:**
   - Search by title (case-insensitive)  
@@ -71,5 +71,4 @@ Backend API Docs: `http://localhost:8000/docs`
 
 ## Info
 
-On behalf of **DHC Group**
 Developer: **Ali Khavari**
